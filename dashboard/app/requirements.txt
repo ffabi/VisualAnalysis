@@ -1,3 +1,9 @@
-dash
+dash==1.17.0
 dash-daq
 dash-bootstrap-components
+pandas
+numpy
+pytz
+suntime
+statsmodels
+plotly==4.13.0
