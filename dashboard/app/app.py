@@ -4,12 +4,9 @@ import dash_bootstrap_components as dbc
 import dash_html_components as html
 from dash.dependencies import Input, Output
 
-import plotly
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
-import os
 import pytz
 import datetime
 import pandas as pd
@@ -51,7 +48,7 @@ def sun_is_up(date_and_time):
 
 
 def create_solar_dataset():
-    solar = pd.read_csv('https://raw.githubusercontent.com/ffabi/VisualAnalysis/main/data/PV_Elec_Gas3.csv', ',')
+    solar = pd.read_csv('/data/PV_Elec_Gas3.csv', ',')
 
     solar = solar.rename(columns={"Unnamed: 0": "date"})
     solar = solar.rename(columns={"kWh electricity/day": "grid_usage"})
@@ -88,8 +85,7 @@ def create_solar_dataset():
 
 
 def create_weather_dataset():
-    weather = pd.read_csv("https://raw.githubusercontent.com/ffabi/VisualAnalysis/main/data/weather_in_Antwerp.csv",
-                          ";")
+    weather = pd.read_csv("/data/weather_in_Antwerp.csv", ";")
 
     weather = weather.rename(columns={"Unnamed: 0": "datetime", "barometer": "pressure"})
 
@@ -175,7 +171,7 @@ available_indicators = {
     "temp": "Temperature (\u00b0C)"
 }
 color_scales = {
-    "is_cloudy": px.colors.sequential.Blues_r,
+    "is_cloudy": px.colors.sequential.Blues,
     "temp": px.colors.sequential.Bluered
 }
 
@@ -253,16 +249,28 @@ app.layout = html.Div([
 
         dbc.Row(dbc.Col(dcc.Graph(id='monthly-production')))
     ]),
+
+    html.Div(id='intermediate-value', style={'display': 'none'})
 ])
 
 
 @app.callback(
-    Output('weather-conditions', 'figure'),
+    Output('intermediate-value', 'children'),
+    Input('color-base', 'value'),
     Input('clearness-slider', 'value'),
     Input('year-slider', 'value'))
-def update_weather_conditions(clearness_values, year_values):
-    dff = df[df['year'] >= year_values[0]][df['year'] < year_values[1]]
-    dff = dff[dff['is_clear'] >= clearness_values[0]][dff['is_clear'] <= clearness_values[1]]
+def update_energy_vs_daylight_hours(color_base, clearness_values, year_values):
+    filtered_df = df[df['year'] >= year_values[0]][df['year'] < year_values[1]]
+    filtered_df = filtered_df[filtered_df['is_clear'] >= clearness_values[0]][filtered_df['is_clear'] <= clearness_values[1]]
+
+    return filtered_df.to_json(date_format='iso', orient='split')
+
+
+@app.callback(
+    Output('weather-conditions', 'figure'),
+    Input('intermediate-value', 'children'))
+def update_weather_conditions(jsonified_cleaned_data):
+    dff = pd.read_json(jsonified_cleaned_data, orient='split')
 
     dff = dff[["is_clear", "is_cloudy", "is_rainy"]].agg("mean").reset_index()
     dff.columns = ["index", "values"]
@@ -289,11 +297,9 @@ def update_weather_conditions(clearness_values, year_values):
 @app.callback(
     Output('energy-vs-sunny-hours', 'figure'),
     Input('color-base', 'value'),
-    Input('clearness-slider', 'value'),
-    Input('year-slider', 'value'))
-def update_energy_vs_daylight_hours(color_base, clearness_values, year_values):
-    dff = df[df['year'] >= year_values[0]][df['year'] < year_values[1]]
-    dff = dff[dff['is_clear'] >= clearness_values[0]][dff['is_clear'] <= clearness_values[1]]
+    Input('intermediate-value', 'children'))
+def update_energy_vs_daylight_hours(color_base, jsonified_cleaned_data):
+    dff = pd.read_json(jsonified_cleaned_data, orient='split')
 
     title = "Daily produced energy vs daylight hours"
 
@@ -322,11 +328,9 @@ def update_energy_vs_daylight_hours(color_base, clearness_values, year_values):
 @app.callback(
     Output('energy-vs-temp', 'figure'),
     Input('color-base', 'value'),
-    Input('clearness-slider', 'value'),
-    Input('year-slider', 'value'))
-def update_energy_vs_temperature(color_base, clearness_values, year_values):
-    dff = df[df['year'] >= year_values[0]][df['year'] < year_values[1]]
-    dff = dff[dff['is_clear'] >= clearness_values[0]][dff['is_clear'] <= clearness_values[1]]
+    Input('intermediate-value', 'children'))
+def update_energy_vs_temperature(color_base, jsonified_cleaned_data):
+    dff = pd.read_json(jsonified_cleaned_data, orient='split')
 
     title = "Produced energy vs temperature"
 
@@ -353,11 +357,9 @@ def update_energy_vs_temperature(color_base, clearness_values, year_values):
 
 @app.callback(
     Output('monthly-production', 'figure'),
-    Input('clearness-slider', 'value'),
-    Input('year-slider', 'value'))
-def update_monthly_production(clearness_values, year_values):
-    dff = df[df['year'] >= year_values[0]][df['year'] < year_values[1]]
-    dff = dff[dff['is_clear'] >= clearness_values[0]][dff['is_clear'] <= clearness_values[1]]
+    Input('intermediate-value', 'children'))
+def update_monthly_production(jsonified_cleaned_data):
+    dff = pd.read_json(jsonified_cleaned_data, orient='split')
 
     title = "Solar energy production by month"
 
@@ -379,11 +381,9 @@ def update_monthly_production(clearness_values, year_values):
 
 @app.callback(
     Output('monthly-consumption', 'figure'),
-    Input('clearness-slider', 'value'),
-    Input('year-slider', 'value'))
-def update_monthly_consumption(clearness_values, year_values):
-    dff = df[df['year'] >= year_values[0]][df['year'] < year_values[1]]
-    dff = dff[dff['is_clear'] >= clearness_values[0]][dff['is_clear'] <= clearness_values[1]]
+    Input('intermediate-value', 'children'))
+def update_monthly_consumption(jsonified_cleaned_data):
+    dff = pd.read_json(jsonified_cleaned_data, orient='split')
 
     title = "Summary of daily solar energy production, total energy consumption and gas consumption by month"
 
@@ -417,5 +417,4 @@ def update_monthly_consumption(clearness_values, year_values):
 
 
 if __name__ == "__main__":
-    debug = False if os.environ["DASH_DEBUG_MODE"] == "False" else True
-    app.run_server(host="0.0.0.0", port=8050, debug=True)
+    app.run_server(host="0.0.0.0", port=8050, debug=False)
